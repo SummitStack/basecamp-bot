@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "")
 
+
 def date_range(start, end):
     d = datetime.strptime(start, "%Y-%m-%d").date()
     e = datetime.strptime(end, "%Y-%m-%d").date()
