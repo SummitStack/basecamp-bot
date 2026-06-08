@@ -1,9 +1,10 @@
 import requests
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "")
 
+ET = timezone(timedelta(hours=-4))  # EDT (change to -5 in winter)
 
 def date_range(start, end):
     d = datetime.strptime(start, "%Y-%m-%d").date()
@@ -81,7 +82,7 @@ def find_available_dates(data, target_dates, trailhead_filter):
 
 def run_checks():
     results = []
-    checked_at = datetime.now().strftime("%Y-%m-%d %H:%M ET")
+    checked_at = datetime.now(ET).strftime("%Y-%m-%d %H:%M ET")
     for permit in PERMITS:
         print(f"\nChecking: {permit['name']}")
         all_openings = []
@@ -98,8 +99,8 @@ def run_checks():
 
 def build_slack_message(results, checked_at):
     if not results:
-        return {"text": f"🏕️ *Basecamp Bot* — {checked_at}\n\nNo openings found."}
-    lines = [f"🏕️ *Basecamp Bot — Openings Found!* — {checked_at}\n"]
+        return {"text": f":camping: *Basecamp Bot* — {checked_at}\n\nNo openings found."}
+    lines = [f":camping: *Basecamp Bot — Openings Found!* — {checked_at}\n"]
     for r in results:
         lines.append(f"*{r['name']}*")
         for day, division, remaining in r["openings"]:
@@ -116,7 +117,7 @@ def send_slack(message):
     requests.post(SLACK_WEBHOOK, json=message, timeout=10)
 
 if __name__ == "__main__":
-    print(f"=== Basecamp Bot {datetime.now()} ===")
+    print(f"=== Basecamp Bot {datetime.now(ET)} ===")
     results, checked_at = run_checks()
     send_slack(build_slack_message(results, checked_at))
     print("\n=== Done ===")
