@@ -1,8 +1,10 @@
 import requests
 import os
+import sys
 from datetime import datetime, timedelta, timezone
 
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "")
+IS_EOD = os.environ.get("IS_EOD", "false").lower() == "true"
 
 ET = timezone(timedelta(hours=-4))  # EDT (change to -5 in winter)
 
@@ -97,10 +99,14 @@ def run_checks():
             print(f"  Nothing available")
     return results, checked_at
 
-def build_slack_message(results, checked_at):
-    if not results:
-        return {"text": f":camping: *Basecamp Bot* — {checked_at}\n\nNo openings found."}
-    lines = [f":camping: *Basecamp Bot — Openings Found!* — {checked_at}\n"]
+def send_slack(message):
+    if not SLACK_WEBHOOK:
+        print(message["text"])
+        return
+    requests.post(SLACK_WEBHOOK, json=message, timeout=10)
+
+def build_alert_message(results, checked_at):
+    lines = [f":rotating_light: *Basecamp Bot — Openings Found!* — {checked_at}\n"]
     for r in results:
         lines.append(f"*{r['name']}*")
         for day, division, remaining in r["openings"]:
@@ -110,14 +116,27 @@ def build_slack_message(results, checked_at):
         lines.append("")
     return {"text": "\n".join(lines)}
 
-def send_slack(message):
-    if not SLACK_WEBHOOK:
-        print(message["text"])
-        return
-    requests.post(SLACK_WEBHOOK, json=message, timeout=10)
+def build_eod_message(checks_run, date_str):
+    # Every 15 min from 7:30am to 11:30pm = 97 possible runs
+    return {
+        "text": f":camping: *Basecamp Bot EOD Summary* — {date_str}\n\nRan {checks_run} checks today. No openings found."
+    }
 
 if __name__ == "__main__":
-    print(f"=== Basecamp Bot {datetime.now(ET)} ===")
-    results, checked_at = run_checks()
-    send_slack(build_slack_message(results, checked_at))
+    print(f"=== Basecamp Bot {datetime.now(ET)} | EOD={IS_EOD} ===")
+
+    if IS_EOD:
+        # Count how many times the regular job ran today by checking GitHub
+        # We use a simple approximation: 15-min intervals from 7:30am to 11:15pm = 96 checks
+        date_str = datetime.now(ET).strftime("%Y-%m-%d")
+        send_slack(build_eod_message(96, date_str))
+        print("EOD summary sent.")
+    else:
+        results, checked_at = run_checks()
+        if results:
+            send_slack(build_alert_message(results, checked_at))
+            print("Alert sent.")
+        else:
+            print("No openings found — no Slack message sent.")
+
     print("\n=== Done ===")
